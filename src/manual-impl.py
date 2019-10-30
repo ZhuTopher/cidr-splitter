@@ -49,3 +49,13 @@ def get_cidr_last_addr(cidr):
     #print(hexlify(cidr_high_bytes))
 
     return ipaddress.ip_address(inet_ntoa(cidr_high_bytes))
+
+def compare_ips(ip_a, ip_b):
+    a = int.from_bytes(inet_aton(str(ip_a)), byteorder='big', signed=False)
+    b = int.from_bytes(inet_aton(str(ip_b)), byteorder='big', signed=False)
+
+    if a < b:
+        return -1
+    if a > b:
+        return 1
+    return 0

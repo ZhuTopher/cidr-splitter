@@ -25,11 +25,18 @@ def get_cidr_first_addr(cidr):
 def get_cidr_last_addr(cidr):
     return cidr.broadcast_address
 
+def compare_ips(ip_a, ip_b):
+    if ip_a < ip_b:
+        return -1
+    if ip_a > ip_b:
+        return 1
+    return 0
+
 def sort_cidrs(cidrs):
     return sorted(cidrs)
 
 ''' MAIN CODE '''
-# Given two IP addresses, `low` & `high`, create a (sorted) list of CIDR
+# Given two IP address strings, `low` & `high`, create a (sorted) list of CIDR
 # ranges (and individual IPs if necessary) which equate to that IP range
 def create_cidrs_from_ip_range(low, high):
     print('stub')
@@ -38,66 +45,117 @@ def create_cidrs_from_ip_range(low, high):
 # this function is going to be operating on the byte level for these addresses
 # - again for exercise
 def split_cidr_by_exclusion(src_cidr, exclude_cidr):
-    src_low = int.from_bytes(inet_aton(str(get_cidr_first_addr(src_cidr))), byteorder='big', signed=False)
-    src_high = int.from_bytes(inet_aton(str(get_cidr_last_addr(src_cidr))), byteorder='big', signed=False)
+    src_entirely_excluded = True
 
-    exclude_low = int.from_bytes(inet_aton(str(get_cidr_first_addr(exclude_cidr))), byteorder='big', signed=False)
-    exclude_high = int.from_bytes(inet_aton(str(get_cidr_last_addr(exclude_cidr))), byteorder='big', signed=False)
+    src_low = get_cidr_first_addr(src_cidr)
+    src_high = get_cidr_last_addr(src_cidr)
+
+    exclude_low = get_cidr_first_addr(exclude_cidr)
+    exclude_high = get_cidr_last_addr(exclude_cidr)
 
     ip_ranges = []
     low = src_low
 
-    # TODO: Handle boundary edges more carefully; currently including erroneous IPs
+    # TODO: Handle edge cases more carefully (/32 CIDRs, exclusion superset src, etc.)
+    # - currently including erroneous IPs
     # assumes src_low <= src_high and exclude_low <= exclude_high
-    #print('src_low: %s' % inet_ntoa(int.to_bytes(src_low, length=4, byteorder='big', signed=False)))
-    #print('src_high: %s' % inet_ntoa(int.to_bytes(src_high, length=4, byteorder='big', signed=False)))
-    #print('exclude_low: %s' % inet_ntoa(int.to_bytes(exclude_low, length=4, byteorder='big', signed=False)))
-    #print('exclude_high: %s' % inet_ntoa(int.to_bytes(exclude_high, length=4, byteorder='big', signed=False)))
-    loop = True
-    while loop:
-        #print('low: %s' % inet_ntoa(int.to_bytes(low, length=4, byteorder='big', signed=False)))
-        if low < exclude_low:
+    print('src_low: %s' % src_low)
+    print('src_high: %s' % src_high)
+    print('exclude_low: %s' % exclude_low)
+    print('exclude_high: %s' % exclude_high)
+
+    # one-pass CIDR splitting
+    # - using `while` + `break` for control-flow (`goto` label behaviour)
+    while True:
+        # Capture [src_low, exclude_low)
+        if compare_ips(low, exclude_low) < 0:
+            src_entirely_excluded = False
+
             old_low = low
-            if exclude_low > src_high:
-                low = src_high
-                loop = False
-                # ^ exit on repetition
+            if compare_ips(src_high, exclude_low) < 0:
+                # exclusion doesn't intersect
+                break
             else:
                 low = exclude_low
-            ip_ranges.append((old_low, low))
-            continue
-        # else: anything below is a candidate for exclusion
+            # `low-1` is subtraction on an IP Address; eg: 10.0.2.0 - 1 = 10.0.1.255
+            ip_ranges.append((old_low, low-1))
 
-        if low < exclude_high:
-            if exclude_high < src_high:
-                low = exclude_high
+        # Skip [exclude_low, exclude_high]
+        if compare_ips(low, exclude_high) < 0:
+            if compare_ips(src_high, exclude_high) < 0:
+                # exclusion completely overlaps the rest of the src range
+                break
             else:
-                low = src_high
-            continue
-        # else: anything below is not selected for exclusion
+                src_entirely_excluded = False
+                low = exclude_high
 
-        if low <= src_high:
-            ip_ranges.append((low, src_high))
-            loop = False
-            # ^ exit on repetition
+        # Capture (exclude_high, src_high]
+        # if compare_ips(low, src_high) <= 0:
+        # - hence we handle the `=` case via the `min()` function
+
+        # `low+1` is addition on an IP Address; eg: 10.0.1.255 + 1 = 10.0.2.0
+        ip_ranges.append((min(low+1, src_high), src_high))
+        break
+    # end while-loop
 
     src_after_excluded_cidrs = []
     for range in ip_ranges:
-        src_after_excluded_cidrs += create_cidrs_from_ip_range(
-            inet_ntoa(int.to_bytes(range[0], length=4, byteorder='big', signed=False)),
-            inet_ntoa(int.to_bytes(range[1], length=4, byteorder='big', signed=False))
-        )
+        src_after_excluded_cidrs += create_cidrs_from_ip_range(str(range[0]), str(range[1]))
 
-    return src_after_excluded_cidrs
+    return src_after_excluded_cidrs, src_entirely_excluded
 
 def main(src_cidrs, exclude_cidrs):
+    if len(exclude_cidrs) == 0:
+        return src_cidrs
+    # if src_cidrs is empty, this will also return an empty list
+
     src_cidrs = sort_cidrs(src_cidrs)
     exclude_cidrs = sort_cidrs(exclude_cidrs)
     print(src_cidrs)
     print(exclude_cidrs)
 
-    # double-traversal while-loops
-    print(split_cidr_by_exclusion(src_cidrs[1], exclude_cidrs[0]))
+    src_after_excluded_cidrs = []
+
+    # O(n^2) double-traversal while-loop
+    # TODO: don't start the range from 0; iteratively increment it
+    # - would still technically be O(n^2) but average use-case would be better
+    n = len(src_cidrs)
+    m = len(exclude_cidrs)
+    for i in range(n):
+        t = len(src_after_excluded_cidrs)
+
+        splits = []
+        src_entirely_excluded = False
+        for j in range(m):
+            src_cidr = src_cidrs[i]
+            exclude_cidr = exclude_cidrs[j]
+
+            if compare_ips(get_cidr_last_addr(exclude_cidr), get_cidr_first_addr(src_cidr)) < 0:
+                continue
+            if compare_ips(get_cidr_last_addr(src_cidr), get_cidr_first_addr(exclude_cidr)) < 0:
+                # exit the inner for-loop
+                break
+            # else, the CIDRs overlap
+
+            split_cidrs, src_entirely_excluded = split_cidr_by_exclusion(src_cidr, exclude_cidr)
+            splits += split_cidrs
+
+            if src_entirely_excluded:
+                # exit the inner for-loop
+                break
+        # end inner for-loop
+
+        if (len(splits) == 0) and (not src_entirely_excluded):
+            # CIDR wasn't split at all
+
+            # TEMP:
+            src_after_excluded_cidrs.append((str(get_cidr_first_addr(src_cidr)), str(get_cidr_last_addr(src_cidr))))
+            #src_after_excluded_cidrs += src_cidr
+        else:
+            src_after_excluded_cidrs += splits
+    # end outer for-loop
+
+    print(src_after_excluded_cidrs)
 
 # Assumes that there are no individual addresses mixed in with CIDRs
 # - i.e: individual addresses should be /32 CIDRs
