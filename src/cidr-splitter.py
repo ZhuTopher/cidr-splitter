@@ -1,5 +1,12 @@
 import ipaddress
+#import numpy
+
+# 'ipaddress.ip_address.packed' is more succinct, but using the following
+# functions from 'socket' instead for forward-backward conversion clarity
 from socket import inet_aton, inet_ntoa
+
+# just including this in order to print Python bytes as raw hex characters
+# (and not auto-encoded to ASCII/UTF characters)
 from binascii import hexlify, unhexlify
 
 '''
@@ -9,34 +16,79 @@ since I want to convert this code to other languages (i.e: Java) which are
 not as fortunate ;(
 '''
 
-def split_cidr_by_exclusion(src_cidr, exclude_cidr):
-    # Array-syntax is Python-specific, but the idea is just to get the first
-    # address of the CIDR block
-    src_low = src_cidr[0]
+''' HELPER FUNCTIONS '''
+# just using native Python implementations; see `manual-imply.py` otherwise
 
-    # TODO: use bit addition to add hostmask to first address to find 'high'
-    # - this is more directly translatable between languages
-    src_high = src_cidr[src_cidr.num_addresses-1]
+def get_cidr_first_addr(cidr):
+    return cidr.network_address
 
+def get_cidr_last_addr(cidr):
+    return cidr.broadcast_address
 
-# this can be accomplished by `sorted(ipaddress.ip_network)` already,
-# but this is for the purpose of exercise & translatability
 def sort_cidrs(cidrs):
-    packed_ip_cidrs = []
-    for cidr in cidrs:
-        packed_ip_cidrs.append(
-            # `cidr[0].packed` is more succinct, but using the following
-            # approach instead for forward-backward conversion clarity
-           (inet_aton(str(cidr[0])), cidr.prefixlen)
-        )
-    packed_ip_cidrs = sorted(packed_ip_cidrs, key=lambda x: x[0])
+    return sorted(cidrs)
 
-    sorted_cidrs = []
-    for cidr_pair in packed_ip_cidrs:
-        sorted_cidrs.append(
-            ipaddress.ip_network('%s/%d' % (inet_ntoa(cidr_pair[0]), cidr_pair[1]))
+''' MAIN CODE '''
+# Given two IP addresses, `low` & `high`, create a (sorted) list of CIDR
+# ranges (and individual IPs if necessary) which equate to that IP range
+def create_cidrs_from_ip_range(low, high):
+    print('stub')
+    return [(low, high)]
+
+# this function is going to be operating on the byte level for these addresses
+# - again for exercise
+def split_cidr_by_exclusion(src_cidr, exclude_cidr):
+    src_low = int.from_bytes(inet_aton(str(get_cidr_first_addr(src_cidr))), byteorder='big', signed=False)
+    src_high = int.from_bytes(inet_aton(str(get_cidr_last_addr(src_cidr))), byteorder='big', signed=False)
+
+    exclude_low = int.from_bytes(inet_aton(str(get_cidr_first_addr(exclude_cidr))), byteorder='big', signed=False)
+    exclude_high = int.from_bytes(inet_aton(str(get_cidr_last_addr(exclude_cidr))), byteorder='big', signed=False)
+
+    ip_ranges = []
+    low = src_low
+
+    # TODO: Handle boundary edges more carefully; currently including erroneous IPs
+    # assumes src_low <= src_high and exclude_low <= exclude_high
+    #print('src_low: %s' % inet_ntoa(int.to_bytes(src_low, length=4, byteorder='big', signed=False)))
+    #print('src_high: %s' % inet_ntoa(int.to_bytes(src_high, length=4, byteorder='big', signed=False)))
+    #print('exclude_low: %s' % inet_ntoa(int.to_bytes(exclude_low, length=4, byteorder='big', signed=False)))
+    #print('exclude_high: %s' % inet_ntoa(int.to_bytes(exclude_high, length=4, byteorder='big', signed=False)))
+    loop = True
+    while loop:
+        #print('low: %s' % inet_ntoa(int.to_bytes(low, length=4, byteorder='big', signed=False)))
+        if low < exclude_low:
+            old_low = low
+            if exclude_low > src_high:
+                low = src_high
+                loop = False
+                # ^ exit on repetition
+            else:
+                low = exclude_low
+            ip_ranges.append((old_low, low))
+            continue
+        # else: anything below is a candidate for exclusion
+
+        if low < exclude_high:
+            if exclude_high < src_high:
+                low = exclude_high
+            else:
+                low = src_high
+            continue
+        # else: anything below is not selected for exclusion
+
+        if low <= src_high:
+            ip_ranges.append((low, src_high))
+            loop = False
+            # ^ exit on repetition
+
+    src_after_excluded_cidrs = []
+    for range in ip_ranges:
+        src_after_excluded_cidrs += create_cidrs_from_ip_range(
+            inet_ntoa(int.to_bytes(range[0], length=4, byteorder='big', signed=False)),
+            inet_ntoa(int.to_bytes(range[1], length=4, byteorder='big', signed=False))
         )
-    return sorted_cidrs
+
+    return src_after_excluded_cidrs
 
 def main(src_cidrs, exclude_cidrs):
     src_cidrs = sort_cidrs(src_cidrs)
@@ -45,6 +97,7 @@ def main(src_cidrs, exclude_cidrs):
     print(exclude_cidrs)
 
     # double-traversal while-loops
+    print(split_cidr_by_exclusion(src_cidrs[1], exclude_cidrs[0]))
 
 # Assumes that there are no individual addresses mixed in with CIDRs
 # - i.e: individual addresses should be /32 CIDRs
