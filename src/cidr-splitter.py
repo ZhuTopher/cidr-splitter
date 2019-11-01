@@ -174,9 +174,11 @@ if __name__ == '__main__':
 
     # exclude 192.168.2.0-192.168.2.1 -- exclusion trims front entries of src
     # exclude 10.0.16.0-10.0.16.255 -- src is superset of exclusion
+    # exclude 10.0.17.0 -- have multiple exclusions for one src
     # exclude the entire 172.16.0.0 private IP range -- exclusion is superset of src
     exclude = [ipaddress.ip_network('192.168.2.0/31'),
                ipaddress.ip_network('10.0.16.0/24'),
+               ipaddress.ip_network('10.0.17.0/32'),
                ipaddress.ip_network('172.16.0.0/12')]
 
     main(src, exclude)
