@@ -59,3 +59,9 @@ def compare_ips(ip_a, ip_b):
     if a > b:
         return 1
     return 0
+
+# Given two IP address strings, `low` & `high`, create a (sorted) list of CIDR
+# ranges (and individual IPs if necessary) which equate to that IP range
+def create_cidrs_from_ip_range(low, high):
+    print('[ create_cidrs_from_ip_range ] [ STUB ] (%s, %s)' % (low, high))
+    return [(str(low), str(high))]
