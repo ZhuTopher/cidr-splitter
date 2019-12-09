@@ -74,9 +74,40 @@ def compare_ips(ip_a, ip_b):
 
 # Given two IP address strings, `low` & `high`, create a (sorted) list of CIDR
 # ranges (and individual IPs if necessary) which equate to that IP range
-def create_cidrs_from_ip_range(low, high):
-    print('[ create_cidrs_from_ip_range ] [ STUB ] (%s, %s)' % (low, high))
-    return [(str(low), str(high))]
+# - this relies on Python integers being 'unbounded' and left-zero padded
+# - in translation, ensure integer types match the IP address type;
+#   IPv4 needs 32-bit unsigned ints, IPv6 needs 128-bit unsigned ints
+# Assumes low <= high
+def create_cidrs_from_ip_range(low, high, num_bits=32):
+    if num_bits != 32:
+        raise NotImplementedError
+
+    if compare_ips(ipaddress.IPv4Address(low), ipaddress.IPv4Address(high)) > 0:
+        raise ValueError('%s is higher than %s' % (low, high))
+
+    low_int = int.from_bytes(inet_aton(low), byteorder='big', signed=False)
+    high_int = int.from_bytes(inet_aton(high), byteorder='big', signed=False)
+
+    low_bits = ('{0:0%db}' % num_bits).format(low_int)  # zero-pad the left of the bit-string
+    print('low_bits: %s' % low_bits)
+
+    # sweep all bits from least-to-most significant (i.e: right-to-left)
+    for i in range(num_bits):  # 32-bit addresses for IPv4
+        bitmask = 1 << i  # bitwise left shift the number 1 `i` times
+        # print(format(bitmask, 'b'))
+
+        bitmask_value = low_int & bitmask  # bitwise AND on the bitmask
+        print(format(bitmask_value, 'b'))
+
+        if bitmask_value == 0:
+            continue
+        # else, there is a '1' at the `i`th bit (from right-to-left)
+        # or in other words, at the `num_bits - i`th character in the bit-string
+
+
+
+
+    return 'stub'
 
 if __name__ == '__main__':
     print(sort_cidrs([
